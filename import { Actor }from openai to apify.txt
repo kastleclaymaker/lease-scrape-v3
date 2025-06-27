@@ -1,0 +1,80 @@
+import { Actor } from 'apify';
+import puppeteer from 'puppeteer';
+
+await Actor.init();
+
+// TEMP: store credentials if missing (remove after first run)
+const maybeCreds = await Actor.getValue('bizjournals-login');
+if (!maybeCreds) {
+    console.log('⚠️ No credentials found — storing fallback');
+    await Actor.setValue('bizjournals-login', {
+        email: 'your_email@example.com',
+        password: 'your_password'
+    });
+}
+const { email, password } = maybeCreds || (await Actor.getValue('bizjournals-login'));
+
+const CRE_PAGES = [
+    'https://www.bizjournals.com/sanfrancisco/news/real_estate',
+    'https://www.bizjournals.com/seattle/news/real_estate',
+    'https://www.bizjournals.com/portland/news/real_estate',
+    'https://www.bizjournals.com/phoenix/news/real_estate'
+];
+
+const browser = await puppeteer.launch({ headless: true });
+const page = await browser.newPage();
+
+console.log('Logging in...');
+await page.goto('https://www.bizjournals.com/login', { waitUntil: 'networkidle2' });
+await page.type('input[type="email"]', email);
+await page.type('input[type="password"]', password);
+await page.click('button[type="submit"]');
+await page.waitForNavigation({ waitUntil: 'networkidle2' });
+console.log('✅ Login successful.');
+
+for (const url of CRE_PAGES) {
+    console.log(`🔍 Scraping market: ${url}`);
+    await page.goto(url, { waitUntil: 'networkidle2' });
+
+    const articles = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('div.feed-item')).map(el => {
+            const title = el.querySelector('h3')?.textContent.trim() || '';
+            const href = el.querySelector('a')?.href || '';
+            const date = el.querySelector('time')?.textContent.trim() || '';
+            const snippet = el.querySelector('p')?.textContent.trim() || '';
+            return { title, href, date, snippet };
+        });
+    });
+
+    const filtered = articles.filter(a =>
+        /lease|leased|expands|relocates/i.test(a.title + a.snippet)
+    );
+
+    for (const art of filtered) {
+        art.market = url;
+        await Actor.pushData(art);
+        console.log('📄 Found lease article:', art.title);
+    }
+}
+
+await browser.close();
+await Actor.exit();
+
+{
+  "name": "lease-bizjournals-actor",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "main.js",
+  "dependencies": {
+    "apify": "^3.4.2",
+    "puppeteer": "^21.3.8"
+  }
+}
+{
+  "name": "lease-bizjournals-actor",
+  "main": "main.js",
+  "env": {}
+}
+
+
+
