@@ -12,7 +12,7 @@ if (!maybeCreds) {
         password: 'your_password'
     });
 }
-const { email, password } = maybeCreds || (await Actor.getValue('bizjournals-login'));
+const { adam.goodman@kastle.com, kastleinthesand0 } = maybeCreds || (await Actor.getValue('bizjournals-login'));
 
 const CRE_PAGES = [
     'https://www.bizjournals.com/sanfrancisco/news/real_estate',
